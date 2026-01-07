@@ -20,6 +20,9 @@ document.addEventListener("DOMContentLoaded", () => {
       activitiesList.innerHTML = "";
 
       // Populate activities list
+      // reset activity select (preserve placeholder)
+      activitySelect.innerHTML = `<option value="">-- Select an activity --</option>`;
+
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
@@ -31,14 +34,21 @@ document.addEventListener("DOMContentLoaded", () => {
         let participantsHTML = "";
         if (participantsArray.length > 0) {
           participantsHTML = `<ul class="participants-list">` + participantsArray.map((p) => {
+            // determine email and display text
+            let email = "";
+            let display = "";
             if (typeof p === "string") {
-              return `<li class="participant-item">${escapeHtml(p)}</li>`;
+              email = p;
+              display = p;
+            } else if (p && (p.name || p.email)) {
+              email = p.email || p.name;
+              display = (p.name ? p.name : p.email) + (p.name && p.email ? ` (${p.email})` : "");
+            } else {
+              display = JSON.stringify(p);
+              email = display;
             }
-            if (p && (p.name || p.email)) {
-              const display = (p.name ? p.name : p.email) + (p.name && p.email ? ` (${p.email})` : "");
-              return `<li class="participant-item">${escapeHtml(display)}</li>`;
-            }
-            return `<li class="participant-item">${escapeHtml(JSON.stringify(p))}</li>`;
+
+            return `<li class="participant-item"><span class="participant-label">${escapeHtml(display)}</span><button class="unregister-btn" data-activity="${escapeHtml(name)}" data-email="${escapeHtml(email)}" title="Remove participant">✖</button></li>`;
           }).join("") + `</ul>`;
         } else {
           participantsHTML = `<p class="no-participants">No participants yet</p>`;
@@ -91,6 +101,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // refresh list so new participant appears immediately
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
@@ -107,6 +119,44 @@ document.addEventListener("DOMContentLoaded", () => {
       messageDiv.className = "error";
       messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
+    }
+  });
+
+  // Delegate click handler for unregister buttons
+  activitiesList.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!target.classList.contains("unregister-btn")) return;
+
+    const activity = target.dataset.activity;
+    const email = target.dataset.email;
+
+    if (!activity || !email) return;
+
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(email)}`,
+        { method: "POST" }
+      );
+
+      const result = await response.json();
+
+      if (response.ok) {
+        messageDiv.textContent = result.message;
+        messageDiv.className = "success";
+        // refresh list
+        fetchActivities();
+      } else {
+        messageDiv.textContent = result.detail || "An error occurred";
+        messageDiv.className = "error";
+      }
+
+      messageDiv.classList.remove("hidden");
+      setTimeout(() => messageDiv.classList.add("hidden"), 5000);
+    } catch (error) {
+      messageDiv.textContent = "Failed to unregister. Please try again.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      console.error("Error unregistering:", error);
     }
   });
 
